@@ -1,0 +1,153 @@
+--12. Formula?i în limbaj natural ?i implementa?i 5 cereri SQL complexe ce vor utiliza, în 
+--ansamblul lor, urm?toarele elemente: 
+--• opera?ie join pe cel pu?in 4 tabele ok
+--• filtrare la nivel de linii ok
+--• subcereri sincronizate în care intervin cel pu?in 3 tabele  ok
+--• subcereri nesincronizate în care intervin cel pu?in 3 tabele ok
+--• grup?ri de date, func?ii grup, filtrare la nivel de grupuri ok
+--• ordon?ri ok
+--• utilizarea a cel pu?in 2 func?ii pe ?iruri de caractere ok, 2 func?ii pe date calendaristice ok, a 
+--func?iilor NVL ok ?i DECODE ok, a cel pu?in unei expresii CASE ok
+--• utilizarea a cel pu?in 1 bloc de cerere (clauza WITH) ok
+
+
+
+
+
+1. Sa se afiseze codul, numele concatenat cu prenumele clientilor al caror nume se termina cu grupul de litere 'che'
+in ordine crescatoare dupa cod si tarifele camerelor in care au fost cazati.
+--opera?ie join pe cel pu?in 4 tabele
+--filtrare la nivel de linii
+--ordon?ri
+--utilizarea a cel pu?in 2 func?ii pe ?iruri de caractere(lower,concat)
+
+select c.id_client, c.nume||' '||c.prenume NUME, tc.tarif 
+from client c, cazat ct, camera cm, tip_camera tc
+where c.id_client=ct.id_client and ct.id_camera= cm.id_camera and cm.id_tip=tc.id_tip and lower(c.nume) like '%che'
+order by 1;
+
+
+
+
+
+
+
+2.Pentru fiecare departament, sa se afiseze denumirea acestuia, precum si numele si salariul celor mai slab platiti angajati din cadrul acestuia. 
+--grup?ri de date, func?ii grup(functia min), filtrare la nivel de grupuri
+
+select a.nume||' '||a.prenume NUME, a.salariu, d.nume_departament, sal_min
+from (select departament_id, min(salariu) sal_min
+      from angajat
+      group by departament_id) aux,
+      angajat a, departamente d
+where a.departament_id = aux.departament_id
+and d.departament_id = aux.departament_id
+and a.salariu = aux.sal_min;
+
+
+3.Sa se afiseze job-ul si suma salariilor pentru job-ul respectiv pe departamentele 11,12,13.
+--decode
+--nvl
+select job_id, nvl(sum(decode(departament_id, 11, salariu)),0) Dep11,
+nvl(sum(decode(departament_id, 12, salariu)),0) Dep12,
+nvl(sum(decode(departament_id, 13, salariu)),0) Dep13
+from angajat
+group by job_id
+order by 1;
+
+
+4. Care sunt 3 cele mai mari salarii si angajatii care le detin(afisati descrescator dupa salariu) pentru persoanele angajate in ultimii 3? 
+Trageti concluzii despre salariile celor 3 angajati(sunt mici=>salariu<5000lei/mari=>salariu>8000lei/medii=> intre 5000 si 8000 lei?)
+--utilizarea a cel pu?in 1 bloc de cerere (clauza WITH)
+--2 func?ii pe date calendaristice(sysdate,months_between)
+--utilizarea unei expresii case
+
+with salarii3 as ( select * 
+                  from (select distinct salariu
+                          from angajat
+                          where MONTHS_BETWEEN(sysdate, data_angajare)<=36
+                          order by salariu desc) 
+                  where rownum<=3)
+select id_angajat, nume, prenume, salariu,
+case when salariu>8000 then 'Salariu mare'
+     when salariu<=8000 and salariu>=5000 then 'Salariu mediu'
+     else  'Salariu mic'
+end as "CONCLUZII"
+from angajat
+where salariu in (select * from salarii3)
+order by 4 desc;
+
+
+5. a)Sa se afiseze tipurile de camere(dupa denumire) in care a fost cazat clientul cu id-ul 100.
+--subcereri nesincronizate în care intervin cel pu?in 3 tabele
+
+select denumire
+from tip_camera
+where id_tip in(select id_tip
+                from camera
+                where id_camera in(select id_camera
+                                    from cazat
+                                    where id_client in(select id_client
+                                                        from client 
+                                                        where id_client=100)));
+                                                        
+b)Pentru fiecare hotel, sa se afiseze numele hotelului, numele si salariile celor mai putin platiti angajati din fiecare departament.
+--subcereri sincronizate în care intervin cel pu?in 3 tabele
+select h.nume, ang.nume, ang.salariu
+from hotel h, angajat ang
+where h.id_hotel=ang.id_hotel and ang.id_hotel in (select  a.id_hotel
+                                                    from angajat a, departamente d
+                                                    where a.departament_id=d.departament_id
+                                                    and a.salariu =  (select min(salariu) sal_min
+                                                                      from angajat
+                                                                      where departament_id = a.departament_id ));
+                  
+                  
+13. Implementarea a 3 opera?ii de actualizare ?i de suprimare a datelor utilizând subcereri.
+
+op1. Sa se creasca cu 10% salariul angajatilor care lucreaza in departamentul 10. Sa se anuleze modificarile.
+
+update angajat
+set salariu = salariu*1.1
+where salariu in ( select salariu
+                   from angajat
+                   where departament_id = 10);
+
+select * from angajat;
+rollback;
+
+op2.Sa se majoreze cu 25% pretul camerelor care au mini frigider.
+
+update tip_camera
+set tarif=tarif*1.25
+where id_facilitate =(select id_facilitate from facilitati where lower(denumire)='mini frigider');
+
+rollback;
+
+op3.Sa se elimine tipurile de camere care au smart tv.
+
+delete 
+from tip_camera
+where id_facilitate in (select unique id_facilitate
+                            from facilitati 
+                            where lower(denumire)='smart tv');
+
+rollback;
+
+select * from tip_camera;
+select * from facilitati;
+
+
+
+
+
+16. Formula?i în limbaj natural ?i implementa?i în SQL: o cerere ce utilizeaz? opera?ia outer join pe minimum 4 tabele ?i dou? 
+cereri ce utilizeaz? opera?ia division.
+
+--JOIN: Sa se afiseze numele si prenumele persoanelor care au fost cazate in camere cu smart tv si tariful camerelor.
+select  c.nume||' '||c.prenume NUME, tc.tarif 
+from client c, cazat ct, camera cm, tip_camera tc, facilitati f
+where c.id_client=ct.id_client and ct.id_camera= cm.id_camera and cm.id_tip=tc.id_tip and tc.id_facilitate = f.id_facilitate and lower(f.denumire)='smart tv'
+order by 2;
+
+
